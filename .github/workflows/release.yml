@@ -1,0 +1,112 @@
+name: 'EHLIB'
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  upload-release:
+    runs-on: ubuntu-latest
+    needs: [build_linux, build_windows]
+    steps:
+    - uses: actions/checkout@v1
+    
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.run_number }}
+        release_name: ehlib-0.0.${{ github.run_number }}
+        draft: false
+        prerelease: false
+        
+    - name: Download artifacts
+      uses: actions/download-artifact@v1
+      with:
+        name: uploads 
+        
+    - name: Upload Linux artifact
+      id: upload-linux
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./uploads/ehlib-0.0.${{ github.run_number }}-Linux-release.tar.gz
+        asset_name: ehlib-0.0.${{ github.run_number }}-Linux-release.tar.gz
+        asset_content_type: application/vnd.debian.binary-package   
+        
+    - name: Upload Windows artifact
+      id: upload-windows
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./uploads/ehlib-0.0.${{ github.run_number }}-win64-release.zip
+        asset_name: ehlib-0.0.${{ github.run_number }}-win64-release.zip
+        asset_content_type: application/zip
+
+  build_linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+      
+      - name: Set PATCH_VERSION
+        run: cmake . -DPATCH_VERSION=${{ github.run_number }}
+      
+      - name: Running cmake 
+        run: cmake --build . --config Release
+      
+      - name: Run tests  
+        run: cmake --build . --target test --config Release
+      
+      - name: Create package
+        run: cmake --build . --target package --config Release
+        
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v1
+        with:
+          name: uploads
+          path: ehlib-0.0.${{ github.run_number }}-Linux-release.tar.gz    
+        
+  build_windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v2
+              
+      - name: Set PATCH_VERSION
+        shell: cmd
+        run: |
+          mkdir build
+          cd build
+          cmake -DPATCH_VERSION=${{ github.run_number }} ../
+          
+      - name: Running cmake
+        shell: cmd
+        run: |
+          cd build
+          cmake --build . --config Release
+          
+      - name: Run tests
+        shell: cmd
+        run: |
+          cd build
+          cmake --build . --target RUN_TESTS --config Release
+          
+      - name: Create package
+        shell: cmd
+        run: |
+          cd build
+          cmake --build . --target package --config Release
+          
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v1
+        with:
+          name: uploads
+          path: ./build/ehlib-0.0.${{ github.run_number }}-win64-release.zip
